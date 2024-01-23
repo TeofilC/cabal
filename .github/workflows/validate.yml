@@ -271,6 +271,73 @@ jobs:
           EXTRA_GHC: "/opt/ghc/${{ matrix.extra-ghc }}/bin/ghc-${{ matrix.extra-ghc }}"
         run: sh validate.sh ${{ env.COMMON_FLAGS }} --lib-only -s lib-suite-extras --extra-hc ${{ env.EXTRA_GHC }}
 
+  validate-alpine:
+    name: Validate statically linked alpine ghc-${{ matrix.ghc }}
+    runs-on: "ubuntu-latest"
+    container: "alpine:latest"
+    strategy:
+      matrix:
+        # Newer ghc versions than 8.8.4 have to be installed with ghcup cause
+        # they are not available in ppa/hvr. The ghcup installation
+        # needs `sudo` which is not available in the xenial container
+        ghc: ["9.4.8"]
+    steps:
+      - name: Install extra dependencies
+        shell: sh
+        run: |
+          apk add bash curl sudo jq pkgconfig zlib-dev zlib-static binutils-gold curl gcc g++ gmp-dev libc-dev libffi-dev make musl-dev ncurses-dev perl tar xz
+      - uses: actions/checkout@v4
+
+      # See https://github.com/haskell/cabal/blob/master/CONTRIBUTING.md#hackage-revisions
+      - name: Manually supplied constraints/allow-newer
+        if: ${{ github.event_name == 'workflow_dispatch' }}
+        run: |
+          echo 'allow-newer:' ${ALLOWNEWER}  >> cabal.project.validate
+          echo 'constraints:' ${CONSTRAINTS} >> cabal.project.validate
+
+      #  See the following link for a breakdown of the following step
+      #  https://github.com/haskell/actions/issues/7#issuecomment-745697160
+      - uses: actions/cache@v3
+        with:
+          # validate.sh uses a special build dir
+          path: |
+            ${{ steps.setup-haskell.outputs.cabal-store }}
+            dist-*
+          key: ${{ runner.os }}-${{ matrix.ghc }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-${{ matrix.ghc }}-
+
+      - uses: haskell-actions/setup@v2
+        id: setup-haskell
+        with:
+          ghc-version: ${{ matrix.ghc }}
+          cabal-version: latest # latest is mandatory for cabal-testsuite, see https://github.com/haskell/cabal/issues/8133
+
+      - name: Enable statically linked executables
+        run: |
+          echo 'executable-static: true' >> cabal.project.validate
+
+      - name: Validate build
+        run: sh validate.sh $FLAGS -s build
+
+      - name: Tar cabal head executable
+        run: |
+          CABAL_EXEC=$(cabal list-bin --builddir=dist-newstyle-validate-ghc-${{ matrix.ghc }} --project-file=cabal.project.validate cabal-install:exe:cabal)
+          # We have to tar the executable to preserve executable permissions
+          # see https://github.com/actions/upload-artifact/issues/38
+          export CABAL_EXEC_TAR="cabal-head-${{ runner.os }}-static-x86_64.tar.gz"
+          tar -czvf $CABAL_EXEC_TAR -C $(dirname "$CABAL_EXEC") $(basename "$CABAL_EXEC")
+          echo "CABAL_EXEC_TAR=$CABAL_EXEC_TAR" >> $GITHUB_ENV
+
+      # We upload the cabal executable built with the ghc used in the release for:
+      # - Reuse it in the dogfooding job (although we could use the cached build dir)
+      # - Make it available in the workflow to make easier testing it locally
+      - name: Upload cabal-install executable to workflow artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: cabal-${{ runner.os }}-static-x86_64
+          path: ${{ env.CABAL_EXEC_TAR }}
+
+
   # The previous jobs use a released version of cabal to build cabal HEAD itself
   # This one uses the cabal HEAD generated executable in the previous step
   # to build itself again, as sanity check
