@@ -481,6 +481,7 @@ jobs:
           prerelease: true
           files: "binaries/cabal-*"
 
+
   prerelease-lts:
     name: Create a GitHub LTS prerelease with the binary artifacts
     runs-on: ubuntu-latest
@@ -515,6 +516,7 @@ jobs:
         name: 'Cabal LTS Nightly Release $$'
         prerelease: true
         files: "binaries/cabal-*"
+
 
   # We use this job as a summary of the workflow
   # It will fail if any of the previous jobs does
