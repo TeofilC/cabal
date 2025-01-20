@@ -472,13 +472,15 @@ jobs:
           merge-multiple: true
 
       - name: (Re)Create GitHub prerelease
-        uses: ncipollo/release-action@v1
+        uses: andelf/nightly-release@main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag: cabal-head
-          allowUpdates: true
-          replacesArtifacts: true
+          tag_name: cabal-head
+          name: 'Cabal Nightly Release $$'
           prerelease: true
-          artifacts: "binaries/cabal-*"
+          files: "binaries/cabal-*"
+
 
   prerelease-lts:
     name: Create a GitHub LTS prerelease with the binary artifacts
@@ -506,13 +508,15 @@ jobs:
         done
 
     - name: (Re)Create GitHub prerelease
-      uses: ncipollo/release-action@v1
+      uses: andelf/nightly-release@main
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        tag: cabal-lts-head
-        allowUpdates: true
-        replacesArtifacts: true
+        tag_name: cabal-lts-head
+        name: 'Cabal LTS Nightly Release $$'
         prerelease: true
-        artifacts: "binaries/cabal-*"
+        files: "binaries/cabal-*"
+
 
   # We use this job as a summary of the workflow
   # It will fail if any of the previous jobs does
